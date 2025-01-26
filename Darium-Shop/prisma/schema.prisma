@@ -1,0 +1,329 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User role enum
+enum Role {
+  USER
+  VENDOR
+  ADMIN
+}
+
+// Payment method enum
+enum PaymentMethod {
+  VISA
+  MASTERCARD
+  PAYPAL
+  ORANGE_MONEY
+  MTN_MOBILE_MONEY
+}
+
+// Order status enum
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+// Chat status enum
+enum ChatStatus {
+  ACTIVE
+  CLOSED
+}
+
+// Verification status enum
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Product category enum
+enum ProductCategory {
+  ELECTRONICS
+  CLOTHING
+  FOOD
+  FURNITURE
+  BOOKS
+  BEAUTY
+  HEALTH
+  SPORTS
+  OTHER
+}
+
+// User model
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String
+  password       String
+  phoneNumber    String
+  age            Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  role           Role     @default(USER)
+  isGoogleAuth   Boolean  @default(false)
+  isFacebookAuth Boolean  @default(false)
+
+  // User specific relations
+  addresses       Address[]
+  orders          Order[]
+  reviews         Review[]
+  cart            Cart?
+  wishlist        Wishlist?
+  favoriteVendors FavoriteVendor[]
+  chats           Chat[]           @relation("UserChats")
+  messages        Message[]
+
+  // Vendor specific relations
+  vendorProfile      Vendor?
+  vendorVerification VendorVerification?
+
+  @@index([email])
+  @@index([role])
+}
+
+// Vendor model
+model Vendor {
+  id          String            @id @default(cuid())
+  userId      String            @unique
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName String?
+  location    String
+  phoneNumber String
+  address     String
+  categories  ProductCategory[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  // Vendor relations
+  products        Product[]
+  chats           Chat[]           @relation("VendorChats")
+  favoredBy       FavoriteVendor[]
+  paymentAccounts PaymentAccount[]
+
+  @@index([userId])
+}
+
+// Vendor verification model
+model VendorVerification {
+  id          String             @id @default(cuid())
+  userId      String             @unique
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  idImage     String // URL to stored image
+  status      VerificationStatus @default(PENDING)
+  submittedAt DateTime           @default(now())
+  verifiedAt  DateTime?
+
+  @@index([userId])
+  @@index([status])
+}
+
+// Product model
+model Product {
+  id          String          @id @default(cuid())
+  vendorId    String
+  vendor      Vendor          @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  name        String
+  description String
+  price       Decimal         @db.Decimal(10, 2)
+  quantity    Int
+  category    ProductCategory
+  images      String[] // Array of image URLs
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  // Product relations
+  reviews       Review[]
+  orderItems    OrderItem[]
+  cartItems     CartItem[]
+  wishlistItems WishlistItem[]
+
+  @@index([vendorId])
+  @@index([category])
+  @@index([name])
+}
+
+// Order model
+model Order {
+  id            String        @id @default(cuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status        OrderStatus   @default(PENDING)
+  total         Decimal       @db.Decimal(10, 2)
+  paymentMethod PaymentMethod
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Order relations
+  orderItems OrderItem[]
+  chat       Chat?
+
+  @@index([userId])
+  @@index([status])
+}
+
+// Order item model
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+  price     Decimal @db.Decimal(10, 2)
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+// Cart model
+model Cart {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Cart relations
+  items CartItem[]
+
+  @@index([userId])
+}
+
+// Cart item model
+model CartItem {
+  id        String  @id @default(cuid())
+  cartId    String
+  cart      Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+
+  @@index([cartId])
+  @@index([productId])
+}
+
+// Wishlist model
+model Wishlist {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Wishlist relations
+  items WishlistItem[]
+
+  @@index([userId])
+}
+
+// Wishlist item model
+model WishlistItem {
+  id         String   @id @default(cuid())
+  wishlistId String
+  wishlist   Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id])
+  addedAt    DateTime @default(now())
+
+  @@index([wishlistId])
+  @@index([productId])
+}
+
+// Review model
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  rating    Int      @db.SmallInt
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([productId])
+}
+
+// Address model
+model Address {
+  id         String  @id @default(cuid())
+  userId     String
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  street     String
+  city       String
+  state      String
+  country    String
+  postalCode String
+  isDefault  Boolean @default(false)
+
+  @@index([userId])
+}
+
+// Payment account model
+model PaymentAccount {
+  id            String        @id @default(cuid())
+  vendorId      String
+  vendor        Vendor        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  accountType   PaymentMethod
+  accountNumber String
+  accountName   String
+  isDefault     Boolean       @default(false)
+
+  @@index([vendorId])
+}
+
+// Favorite vendor model
+model FavoriteVendor {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vendorId String
+  vendor   Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  addedAt  DateTime @default(now())
+
+  @@unique([userId, vendorId])
+  @@index([userId])
+  @@index([vendorId])
+}
+
+// Chat model
+model Chat {
+  id        String     @id @default(cuid())
+  orderId   String     @unique
+  order     Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User       @relation("UserChats", fields: [userId], references: [id])
+  vendorId  String
+  vendor    Vendor     @relation("VendorChats", fields: [vendorId], references: [id])
+  status    ChatStatus @default(ACTIVE)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  // Chat relations
+  messages Message[]
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([vendorId])
+  @@index([status])
+}
+
+// Message model
+model Message {
+  id        String   @id @default(cuid())
+  chatId    String
+  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([chatId])
+  @@index([userId])
+}
